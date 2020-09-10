@@ -1,0 +1,43 @@
+global class AttachUpdatedRecordsAsAttahment implements Database.Batchable<sObject>,Database.Stateful {
+    
+    global String csvColumnHeader;
+    global List<String> csvRowValues = new List<String>();
+    
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        String query = 'SELECT Id,BillingStreet, Name FROM Account LIMIT 5';
+        return Database.getQueryLocator(query);
+    }
+    global void execute(Database.BatchableContext bc, List<Account> records){
+        List<Account> caseListforUpdate = new List<Account>();
+        for(Account csRec : records){
+            csRec.billingstreet += ' test';
+            caseListforUpdate.add(csRec);
+        }
+        
+        if(caseListforUpdate.size() > 0 ){
+            try{
+                Database.SaveResult[] SRList =  Database.update(caseListforUpdate);
+                for(Database.SaveResult sr : SRList){
+                    String rowStr = sr.id + ',' + sr.isSuccess();
+                    csvRowValues.add(rowStr);
+                }
+            }catch(dmlException e){}
+        }
+        
+    }    
+    global void finish(Database.BatchableContext bc){
+        
+        Account acc = [SELECT ID,Name FROM Account WHERE Name = 'Sectigo' LIMIT 1];
+        if(acc.Id != null){
+            String documentName = 'CaseReasonUpdatedRecords-'+ Datetime.now().format('MMM') + Datetime.now().year();
+            csvColumnHeader = 'CaseId, isSuccess\n';
+            String csvFile = csvColumnHeader + String.join(csvRowValues,'\n');
+            
+            // Insert the generated CSV file in Document object under "Setup Audit Trail Logs".
+            Attachment doc = new Attachment (Name = documentName, Body = Blob.valueOf(csvFile), ParentId = acc.Id, ContentType='application/vnd.ms-excel');
+            insert doc;
+        }
+    }    
+    
+    
+}
